@@ -9,6 +9,7 @@ Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Str
 | Main | Logo badges, outlined | `https://savantguarded-nuvio-badges.vercel.app/badges.json` |
 | Solid | kingsizew solid logos, colour tiers | `https://savantguarded-nuvio-badges.vercel.app/badges-solid.json` |
 | Mono | kingsizew logos on white | `https://savantguarded-nuvio-badges.vercel.app/badges-mono.json` |
+| Colorful | Mono with skoruppa's colourful icons swapped in (28 filters); the rest stay mono | `https://savantguarded-nuvio-badges.vercel.app/badges-colorful.json` |
 
 ## How it works
 
@@ -25,4 +26,4 @@ npm pack @tabler/icons && mkdir tabler && tar -xzf tabler-icons-*.tgz -C tabler
 cd .. && python3 -I scripts/build-tiered-pack.py && python3 -I scripts/build-filled-pack.py
 ```
 
-`scripts/lib/variants.py` holds the tiered layout rules (labels, suffixes, tiers, spacing). The logo packs (main, solid, mono) are built by the other scripts from their source repos; see each script's header.
+`scripts/lib/variants.py` holds the tiered layout rules (labels, suffixes, tiers, spacing). The colorful pack is built by `scripts/build-colorful-pack.py` from mono plus a saved copy of skoruppa's pack (link in its header). The logo packs (main, solid, mono) are built by the other scripts from their source repos; see each script's header.
