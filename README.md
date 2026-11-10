@@ -1,6 +1,6 @@
 # Nuvio badge packs
 
-Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns; only the look changes. Paste one link, restart Nuvio to switch.
+Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns (colorful: 42, combos split); only the look changes. Paste one link, restart Nuvio to switch.
 
 | Pack | Look | Link |
 |---|---|---|
@@ -9,7 +9,7 @@ Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Str
 | Main | Logo badges, outlined | `https://savantguarded-nuvio-badges.vercel.app/badges.json` |
 | Solid | kingsizew solid logos, colour tiers | `https://savantguarded-nuvio-badges.vercel.app/badges-solid.json` |
 | Mono | kingsizew logos on white | `https://savantguarded-nuvio-badges.vercel.app/badges-mono.json` |
-| Colorful | Mono with skoruppa's colourful icons swapped in (28 filters); the rest stay mono | `https://savantguarded-nuvio-badges.vercel.app/badges-colorful.json` |
+| Colorful | Mono with skoruppa's colourful icons swapped in (28 filters), combos shown as separate badges (42 filters); the rest stay mono | `https://savantguarded-nuvio-badges.vercel.app/badges-colorful.json` |
 
 ## How it works
 
