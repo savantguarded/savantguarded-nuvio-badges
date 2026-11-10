@@ -7,15 +7,20 @@ public/badges-nuvio-official-<palette>.json, images img/nuvio-<palette>-v1-*.png
 Starts from public/badges-mono.json (same filters, ids and order, minus the combos below). For every
 filter the skoruppa pack also covers, the image is replaced with skoruppa's icon (white
 glyph, rendered from its SVG to an 80 px PNG) and the chip takes that palette's fill, border and text colours.
-Filters skoruppa has no icon for (576p, 360p, HDRip, SCR, DTS-ES and the edition tags) keep
-their mono image and white chip. The DV / Atmos / DTS:X combo badges are removed; their
-single badges show side by side instead (e.g. Dolby Vision + HDR10).
+Filters the official pack has no icon for (576p, 360p, HDRip, SCR, DTS-ES and the edition
+tags) get text badges drawn the same way the official ones are: Roboto 700 glyph paths on a
+14-unit-tall canvas, cap height 6.41, baseline 10.5, about 4 units of side padding, in the
+palette's glyph colour, with the chip colours of the closest official badge (LEFTOVER below).
+The DV / Atmos / DTS:X combo badges are removed; their single badges show side by side
+instead (e.g. Dolby Vision + HDR10). Groups are ordered Resolution, Visual, Audio, Source,
+IMAX, Special.
 
 Source pack (save it first, <palette> = colorful / neon / stealth / gold):
   https://nuvio-badges.skoruppa.workers.dev/v1/badge.json?l=en&c=source&g=res,src,hdr,aud,ch,spc&x=p-61&s=filled&b=1&p=<palette>
 
-usage: python3 -I scripts/build-official-pack.py <palette> <saved badge.json>
-needs: rsvg-convert
+usage: python3 -I scripts/build-official-pack.py <palette> <saved badge.json> <roboto 700 font>
+needs: rsvg-convert, fontTools; font: npm pack @fontsource/roboto@5 ->
+  files/roboto-latin-700-normal.woff
 """
 import base64, json, os, subprocess, sys, tempfile
 
@@ -108,5 +113,76 @@ for f in pack["filters"]:
             sys.exit(f"unexpected FLAC rule in {f['id']}")
         f["pattern"] = f["pattern"].replace("(?!(?=.*", "(?!(?!.*" + SKIP[f["id"]] + ")(?=.*")
 
+# Text badges for the filters the official pack has no icon for:
+# mono id -> (label, official filter whose chip colours it borrows, borrow that filter's icon)
+LEFTOVER = {
+    "r-576p": ("576p", "p-480p", False), "r-360p": ("360p", "p-480p", False),
+    "src-hdrip": ("HDRip", "p-webrip", True), "gq-scr": ("SCR", "p-cam", False),
+    "gv-dts-es": ("DTS-ES", "p-dts", False),
+    "open-matte-edition": ("Open Matte", "p-hdtv", False),
+    "regraded-release": ("Regraded", "p-hdtv", False),
+    "edition-directors-cut": ("Director\u2019s Cut", "p-hdtv", False),
+    "edition-extended": ("Extended", "p-hdtv", False),
+    "uncut-edition": ("Uncut", "p-hdtv", False),
+    "uncensored-edition": ("Uncensored", "p-hdtv", False),
+    "black-and-white": ("B&W", "p-hdtv", False),
+    "true-hue-edition": ("True-Hue", "p-hdtv", False),
+    "edition-theatrical": ("Theatrical", "p-hdtv", False),
+}
+import re
+from fontTools.ttLib import TTFont
+from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.pens.transformPen import TransformPen
+import math
+
+font = TTFont(sys.argv[3])
+gs, cmap = font.getGlyphSet(), font.getBestCmap()
+SCALE = 6.41 / font["OS/2"].sCapHeight
+BASE = 10.5
+
+def svg_of(sid):
+    return base64.b64decode(sk[sid]["imageURL"].split(",", 1)[1]).decode()
+
+glyph_fill = re.search(r'fill="([^"]+)"', svg_of("p-hdr")).group(1)
+
+def text_badge(label, icon_from):
+    # Official layout: pen starts at x=4 (x=17 after a 10-unit icon), canvas width is the
+    # text advance + 7 rounded up to an even number. Reproduces every official badge width.
+    icon = ""
+    x = 4.0
+    if icon_from:
+        icon = re.search(r"<g transform=\"translate\(4, 2\)\">.*?</g>", svg_of(icon_from), re.S).group(0)
+        x = 17.0
+    pen = SVGPathPen(gs)
+    for ch in label:
+        g = cmap[ord(ch)]
+        gs[g].draw(TransformPen(pen, (SCALE, 0, 0, -SCALE, x, BASE)))
+        x += gs[g].width * SCALE
+    width = 2 * math.ceil((x + 3) / 2)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="14" viewBox="0 0 {width} 14">'
+            f'{icon}<path d="{pen.getCommands()}" fill="{glyph_fill}"/></svg>')
+
+with tempfile.TemporaryDirectory() as tmp:
+    for f in pack["filters"]:
+        if f["id"] not in LEFTOVER:
+            continue
+        label, colour_from, use_icon = LEFTOVER[f["id"]]
+        svg = os.path.join(tmp, "t.svg")
+        open(svg, "w").write(text_badge(label, colour_from if use_icon else None))
+        name = PREFIX + "x-" + f["id"] + ".png"
+        out = os.path.join(img_dir, name)
+        subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", out, svg], check=True)
+        w = int.from_bytes(open(out, "rb").read()[16:20], "big")
+        if w > MAX_W:
+            sys.exit(f"{name} is {w}px wide (max {MAX_W})")
+        f["imageURL"] = BASE_URL + name
+        for k in ("tagStyle", "tagColor", "borderColor", "textColor"):
+            f[k] = sk[colour_from][k]
+        done += 1
+
+ORDER = ["gr", "gv", "ga", "gq", "imax", "gst"]
+pack["groups"].sort(key=lambda g: ORDER.index(g["id"]))
+pack["filters"].sort(key=lambda f: ORDER.index(f["groupId"]))  # stable: keeps order within groups
+
 json.dump(pack, open(os.path.join(pub, OUT), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print(f"{done} of {len(pack['filters'])} filters swapped -> public/{OUT}")
+print(f"{done} of {len(pack['filters'])} filters restyled -> public/{OUT}")

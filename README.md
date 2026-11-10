@@ -1,6 +1,6 @@
 # Nuvio badge packs
 
-Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns (Nuvio Official packs: 42, combo badges split into their singles); only the look changes. Paste one link, restart Nuvio to switch.
+Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns (Nuvio Official packs: 42, combo badges split into their singles, ordered Resolution, Visual, Audio, Source, IMAX, Special); only the look changes. Paste one link, restart Nuvio to switch.
 
 | Pack | Look | Link |
 |---|---|---|
@@ -9,10 +9,10 @@ Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Str
 | Main | Logo badges, outlined | `https://savantguarded-nuvio-badges.vercel.app/badges.json` |
 | Solid | kingsizew solid logos, colour tiers | `https://savantguarded-nuvio-badges.vercel.app/badges-solid.json` |
 | Mono | kingsizew logos on white | `https://savantguarded-nuvio-badges.vercel.app/badges-mono.json` |
-| Nuvio Official · Colorful | Official Nuvio icons, colour per tier; mono for the rest | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-colorful.json` |
-| Nuvio Official · Neon | Official Nuvio icons, teal glyphs on dark chips; mono for the rest | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-neon.json` |
-| Nuvio Official · Stealth | Official Nuvio icons, grey glyphs on faint chips; mono for the rest | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-stealth.json` |
-| Nuvio Official · Gold | Official Nuvio icons, gold glyphs, gold outline; mono for the rest | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-gold.json` |
+| Nuvio Official · Colorful | Official Nuvio icons, colour per tier | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-colorful.json` |
+| Nuvio Official · Neon | Official Nuvio icons, teal glyphs on dark chips | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-neon.json` |
+| Nuvio Official · Stealth | Official Nuvio icons, grey glyphs on faint chips | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-stealth.json` |
+| Nuvio Official · Gold | Official Nuvio icons, gold glyphs, gold outline | `https://savantguarded-nuvio-badges.vercel.app/badges-nuvio-official-gold.json` |
 
 ## How it works
 
@@ -29,4 +29,4 @@ npm pack @tabler/icons && mkdir tabler && tar -xzf tabler-icons-*.tgz -C tabler
 cd .. && python3 -I scripts/build-tiered-pack.py && python3 -I scripts/build-filled-pack.py
 ```
 
-`scripts/lib/variants.py` holds the tiered layout rules (labels, suffixes, tiers, spacing). The Nuvio Official packs are built by `scripts/build-official-pack.py <palette> <saved badge.json>` from mono plus a saved copy of the official generator's pack (link in its header). The old `badges-colorful.json` link redirects to the Colorful one. The logo packs (main, solid, mono) are built by the other scripts from their source repos; see each script's header.
+`scripts/lib/variants.py` holds the tiered layout rules (labels, suffixes, tiers, spacing). The Nuvio Official packs are built by `scripts/build-official-pack.py <palette> <saved badge.json>` from mono plus a saved copy of the official generator's pack (link in its header) and Roboto 700 for the text badges the generator has no icon for. The old `badges-colorful.json` link redirects to the Colorful one. The logo packs (main, solid, mono) are built by the other scripts from their source repos; see each script's header.
