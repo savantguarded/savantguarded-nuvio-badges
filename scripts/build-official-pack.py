@@ -2,7 +2,7 @@
 
 The official Nuvio badge generator (nuvio-badges.skoruppa.workers.dev) offers palettes such
 as colorful, neon, stealth and gold; they share icons and differ only in colours. Output:
-public/badges-nuvio-official-<palette>.json, images img/nuvio-<palette>-v1-*.png.
+public/badges-nuvio-official-<palette>.json, images img/nuvio-<palette>-v2-*.png.
 
 Starts from public/badges-mono.json (same filters, ids and order, minus the combos below). For every
 filter the skoruppa pack also covers, the image is replaced with skoruppa's icon (white
@@ -13,7 +13,9 @@ tags) get text badges drawn the same way the official ones are: Roboto 700 glyph
 palette's glyph colour, with the chip colours of the closest official badge (LEFTOVER below).
 The DV / Atmos / DTS:X combos keep their own filters and get combined badges in the official
 Dolby style (logo, bold word, lighter word: "Vision HDR10+", "Atmos TrueHD", "DTS:X HD MA");
-set SPLIT_COMBOS to show the single badges side by side instead. Groups are ordered
+set SPLIT_COMBOS to show the single badges side by side instead. Every badge is drawn on a
+15-unit canvas (text about 7% smaller than official) and trimmed to its content with the same
+22 px left and right, so padding is identical on every chip. Groups are ordered
 Resolution, Visual, Source, Audio, IMAX, Special.
 
 Source pack (save it first, <palette> = colorful / neon / stealth / gold):
@@ -23,11 +25,41 @@ usage: python3 -I scripts/build-official-pack.py <palette> <saved badge.json> <r
 needs: rsvg-convert, fontTools; font: npm pack @fontsource/roboto@5 ->
   files/roboto-latin-700-normal.woff
 """
-import base64, json, os, subprocess, sys, tempfile
+import base64, json, os, re, subprocess, sys, tempfile
 
 BASE_URL = "https://savantguarded-nuvio-badges.vercel.app/img/"
 HEIGHT = 80
 MAX_W = 460
+# Every badge (official ones included) is drawn on a canvas 15 units tall instead of the
+# official 14, with the content centred. Text and icons come out about 7% smaller, the same on
+# every chip, and the widest combos fit Nuvio's width limit with the standard side padding.
+CANVAS = 15
+MAX_UNITS = MAX_W * CANVAS / HEIGHT
+
+PAD_PX = 22  # same empty space left and right of every badge's content
+
+def render(svg_path, out):
+    """SVG -> 80 px PNG, trimmed to its content and given PAD_PX on both sides."""
+    from PIL import Image
+    subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", out, svg_path], check=True)
+    im = Image.open(out).convert("RGBA")
+    l, _, r, _ = im.getchannel("A").point(lambda v: 255 if v > 40 else 0).getbbox()
+    w = (r - l) + 2 * PAD_PX
+    if w > MAX_W:
+        sys.exit(f"{out} is {w}px wide (max {MAX_W})")
+    canvas = Image.new("RGBA", (w, HEIGHT))
+    canvas.alpha_composite(im.crop((l, 0, r, HEIGHT)), (PAD_PX, 0))
+    canvas.save(out, optimize=True)
+
+def tall(svg):
+    """Re-frame a 14-unit-tall badge SVG onto the 15-unit canvas, content centred."""
+    m = re.search(r'viewBox="0 0 ([\d.]+) 14"', svg)
+    w = float(m.group(1))
+    if w > MAX_UNITS:
+        sys.exit(f"badge {w} units wide (max {MAX_UNITS})")
+    off = (CANVAS - 14) / 2
+    svg = svg.replace(m.group(0), f'viewBox="0 {-off:g} {m.group(1)} {CANVAS}"', 1)
+    return re.sub(r'(<svg[^>]*?)height="14"', rf'\g<1>height="{CANVAS}"', svg, count=1)
 
 # mono filter id -> skoruppa filter id
 MAP = {
@@ -46,7 +78,7 @@ pub = os.path.join(root, "public")
 img_dir = os.path.join(pub, "img")
 
 palette = sys.argv[1]
-PREFIX = f"nuvio-{palette}-v1-"
+PREFIX = f"nuvio-{palette}-v2-"
 OUT = f"badges-nuvio-official-{palette}.json"
 sk = {f["id"]: f for f in json.load(open(sys.argv[2], encoding="utf-8"))["filters"]}
 pack = json.load(open(os.path.join(pub, "badges-mono.json"), encoding="utf-8"))
@@ -62,10 +94,10 @@ with tempfile.TemporaryDirectory() as tmp:
             sys.exit(f"skoruppa pack has no {sid}")
         head, data = s["imageURL"].split(",", 1)
         svg = os.path.join(tmp, sid + ".svg")
-        open(svg, "wb").write(base64.b64decode(data))
+        open(svg, "w").write(tall(base64.b64decode(data).decode()))
         name = PREFIX + sid[2:] + ".png"
         out = os.path.join(img_dir, name)
-        subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", out, svg], check=True)
+        render(svg, out)
         w = int.from_bytes(open(out, "rb").read()[16:20], "big")
         if w > MAX_W:
             sys.exit(f"{name} is {w}px wide (max {MAX_W})")
@@ -168,9 +200,8 @@ def text_badge(label, icon_from):
             f'{icon}<path d="{pen.getCommands()}" fill="{glyph_fill}"/></svg>')
 
 # Combined badges, drawn like the official Dolby ones: logo, a bold word, a 3-unit gap, then a
-# Roboto 500 word at 92% opacity. "Dolby" is dropped since the logo already says it. Badges that
-# would pass the 80-unit width limit get 2 units of side padding instead of 4 / 3, so their text
-# stays the same size as every other badge instead of Nuvio shrinking the image.
+# Roboto 500 word at 92% opacity. "Dolby" is dropped since the logo already says it. Same side
+# padding as every other badge (4 left, about 3 right).
 # mono id -> (official filter for logo + chip colours, logo?, bold word, light word)
 COMBO_BADGES = {
     "v-dv-hdr10p": ("p-dv", True, "Vision", "HDR10+"),
@@ -184,7 +215,6 @@ COMBO_BADGES = {
 light = TTFont(sys.argv[3].replace("-700-", "-500-"))
 lgs, lcmap = light.getGlyphSet(), light.getBestCmap()
 LSCALE = 6.41 / light["OS/2"].sCapHeight
-MAX_UNITS = MAX_W * 14 / HEIGHT
 
 def run(glyphs, cm, sc, text, x):
     pen = SVGPathPen(glyphs)
@@ -195,19 +225,13 @@ def run(glyphs, cm, sc, text, x):
     return pen.getCommands(), x
 
 def combo_badge(src, logo, bold, lite):
-    for pad, right in ((4, 3), (2, 1)):
-        x = pad + (14 if logo else 0)
-        d1, x = run(gs, cmap, SCALE, bold, x)
-        d2, x = run(lgs, lcmap, LSCALE, lite, x + 3)
-        width = 2 * math.ceil((x + right) / 2)
-        if width <= MAX_UNITS:
-            break
-    else:
-        sys.exit(f"{bold} {lite} does not fit")
+    x = 18 if logo else 4
+    d1, x = run(gs, cmap, SCALE, bold, x)
+    d2, x = run(lgs, lcmap, LSCALE, lite, x + 3)
+    width = 2 * math.ceil((x + 3) / 2)
     g = ""
     if logo:
         g = re.search(r'<g transform="translate\(4, 3\)">.*?</g>', svg_of(src), re.S).group(0)
-        g = g.replace("translate(4, 3)", f"translate({pad}, 3)")
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="14" viewBox="0 0 {width} 14">'
             f'{g}<path d="{d1}" fill="{glyph_fill}"/><path d="{d2}" fill="{glyph_fill}" fill-opacity="0.92"/></svg>')
 
@@ -217,9 +241,9 @@ with tempfile.TemporaryDirectory() as tmp:
             continue
         src, logo, bold, lite = COMBO_BADGES[f["id"]]
         svg = os.path.join(tmp, "c.svg")
-        open(svg, "w").write(combo_badge(src, logo, bold, lite))
+        open(svg, "w").write(tall(combo_badge(src, logo, bold, lite)))
         name = PREFIX + "c-" + f["id"] + ".png"
-        subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", os.path.join(img_dir, name), svg], check=True)
+        render(svg, os.path.join(img_dir, name))
         f["imageURL"] = BASE_URL + name
         for k in ("tagStyle", "tagColor", "borderColor", "textColor"):
             f[k] = sk[src][k]
@@ -231,10 +255,10 @@ with tempfile.TemporaryDirectory() as tmp:
             continue
         label, colour_from, use_icon = LEFTOVER[f["id"]]
         svg = os.path.join(tmp, "t.svg")
-        open(svg, "w").write(text_badge(label, colour_from if use_icon else None))
+        open(svg, "w").write(tall(text_badge(label, colour_from if use_icon else None)))
         name = PREFIX + "x-" + f["id"] + ".png"
         out = os.path.join(img_dir, name)
-        subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", out, svg], check=True)
+        render(svg, out)
         w = int.from_bytes(open(out, "rb").read()[16:20], "big")
         if w > MAX_W:
             sys.exit(f"{name} is {w}px wide (max {MAX_W})")
