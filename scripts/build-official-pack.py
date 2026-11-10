@@ -1,21 +1,24 @@
-"""Build the 'colorful' pack: the mono pack with skoruppa's colourful icons swapped in.
+"""Build a Nuvio Official pack: the mono pack with the official Nuvio badge icons swapped in.
+
+The official Nuvio badge generator (nuvio-badges.skoruppa.workers.dev) offers palettes such
+as colorful, neon, stealth and gold; they share icons and differ only in colours. Output:
+public/badges-nuvio-official-<palette>.json, images img/nuvio-<palette>-v1-*.png.
 
 Starts from public/badges-mono.json (same filters, ids and order, minus the combos below). For every
 filter the skoruppa pack also covers, the image is replaced with skoruppa's icon (white
-glyph, rendered from its SVG to an 80 px PNG) and the chip takes skoruppa's fill colour.
+glyph, rendered from its SVG to an 80 px PNG) and the chip takes that palette's fill, border and text colours.
 Filters skoruppa has no icon for (576p, 360p, HDRip, SCR, DTS-ES and the edition tags) keep
 their mono image and white chip. The DV / Atmos / DTS:X combo badges are removed; their
 single badges show side by side instead (e.g. Dolby Vision + HDR10).
 
-Source pack (save it first):
-  https://nuvio-badges.skoruppa.workers.dev/v1/badge.json?l=en&c=source&g=res,src,hdr,aud,ch,spc&x=p-61&s=filled&b=1&p=colorful
+Source pack (save it first, <palette> = colorful / neon / stealth / gold):
+  https://nuvio-badges.skoruppa.workers.dev/v1/badge.json?l=en&c=source&g=res,src,hdr,aud,ch,spc&x=p-61&s=filled&b=1&p=<palette>
 
-usage: python3 -I scripts/build-colorful-pack.py <skoruppa badge.json>
+usage: python3 -I scripts/build-official-pack.py <palette> <saved badge.json>
 needs: rsvg-convert
 """
 import base64, json, os, subprocess, sys, tempfile
 
-PREFIX = "colorful-v1-"
 BASE_URL = "https://savantguarded-nuvio-badges.vercel.app/img/"
 HEIGHT = 80
 MAX_W = 460
@@ -36,7 +39,10 @@ root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 pub = os.path.join(root, "public")
 img_dir = os.path.join(pub, "img")
 
-sk = {f["id"]: f for f in json.load(open(sys.argv[1], encoding="utf-8"))["filters"]}
+palette = sys.argv[1]
+PREFIX = f"nuvio-{palette}-v1-"
+OUT = f"badges-nuvio-official-{palette}.json"
+sk = {f["id"]: f for f in json.load(open(sys.argv[2], encoding="utf-8"))["filters"]}
 pack = json.load(open(os.path.join(pub, "badges-mono.json"), encoding="utf-8"))
 
 done = 0
@@ -58,9 +64,8 @@ with tempfile.TemporaryDirectory() as tmp:
         if w > MAX_W:
             sys.exit(f"{name} is {w}px wide (max {MAX_W})")
         f["imageURL"] = BASE_URL + name
-        f["tagStyle"] = "filled"
-        f["tagColor"] = f["borderColor"] = s["tagColor"]
-        f["textColor"] = "#FFFFFF"
+        for k in ("tagStyle", "tagColor", "borderColor", "textColor"):
+            f[k] = s[k]
         done += 1
 
 # Combos are dropped: their single badges show back to back instead. Each single filter hides
@@ -103,5 +108,5 @@ for f in pack["filters"]:
             sys.exit(f"unexpected FLAC rule in {f['id']}")
         f["pattern"] = f["pattern"].replace("(?!(?=.*", "(?!(?!.*" + SKIP[f["id"]] + ")(?=.*")
 
-json.dump(pack, open(os.path.join(pub, "badges-colorful.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print(f"{done} of {len(pack['filters'])} filters swapped -> public/badges-colorful.json")
+json.dump(pack, open(os.path.join(pub, OUT), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print(f"{done} of {len(pack['filters'])} filters swapped -> public/{OUT}")
