@@ -11,9 +11,10 @@ Filters the official pack has no icon for (576p, 360p, HDRip, SCR, DTS-ES and th
 tags) get text badges drawn the same way the official ones are: Roboto 700 glyph paths on a
 14-unit-tall canvas, cap height 6.41, baseline 10.5, about 4 units of side padding, in the
 palette's glyph colour, with the chip colours of the closest official badge (LEFTOVER below).
-The DV / Atmos / DTS:X combo badges are removed; their single badges show side by side
-instead (e.g. Dolby Vision + HDR10). Groups are ordered Resolution, Visual, Audio, Source,
-IMAX, Special.
+The DV / Atmos / DTS:X combos keep their own filters and get combined badges in the official
+Dolby style (logo, bold word, lighter word: "Vision HDR10+", "Atmos TrueHD", "DTS:X HD MA");
+set SPLIT_COMBOS to show the single badges side by side instead. Groups are ordered
+Resolution, Visual, Source, Audio, IMAX, Special.
 
 Source pack (save it first, <palette> = colorful / neon / stealth / gold):
   https://nuvio-badges.skoruppa.workers.dev/v1/badge.json?l=en&c=source&g=res,src,hdr,aud,ch,spc&x=p-61&s=filled&b=1&p=<palette>
@@ -83,6 +84,9 @@ DV, P, H10, H = mk("00000001"), mk("00000010"), mk("00000011"), mk("00000100")
 AT, TH, DP = mk("00001001"), mk("00010001"), mk("00001010")
 X, MA, HD = mk("00001100"), mk("00001101"), mk("00001110")
 
+# False: keep the combo filters (and their original rules) and draw official-style combined
+# badges for them (COMBO_BADGES below). True: drop them and show the singles side by side.
+SPLIT_COMBOS = False
 COMBOS = ["v-dv-hdr10p", "v-dv-hdr10", "v-dv-hdr", "a-atmos-truehd", "a-atmos-ddplus", "a-dtsx-hdma", "a-dtsx-hd"]
 LIFT = {
     "a-dv": [P, H10, H], "v-hdr10p": [DV], "v-hdr10": [DV], "v-hdr": [DV],
@@ -100,18 +104,19 @@ def lift(pattern, drop):
     group = "(?!.*(?:" + "|".join(alts) + "))" if alts else ""
     return pattern[:start] + group + pattern[end:]
 
-pack["filters"] = [f for f in pack["filters"] if f["id"] not in COMBOS]
-for f in pack["filters"]:
-    if f["id"] in LIFT:
-        f["pattern"] = lift(f["pattern"], LIFT[f["id"]])
-# The old Atmos DD+ and DTS:X HD combos ignored the multi-track FLAC rule, so the half that
-# used to sit inside the combo skips that rule too when its partner is present.
-SKIP = {"a-dp": AT, "a-dtshd": X}
-for f in pack["filters"]:
-    if f["id"] in SKIP:
-        if f["pattern"].count("(?!(?=.*") != 1:
-            sys.exit(f"unexpected FLAC rule in {f['id']}")
-        f["pattern"] = f["pattern"].replace("(?!(?=.*", "(?!(?!.*" + SKIP[f["id"]] + ")(?=.*")
+if SPLIT_COMBOS:
+    pack["filters"] = [f for f in pack["filters"] if f["id"] not in COMBOS]
+    for f in pack["filters"]:
+        if f["id"] in LIFT:
+            f["pattern"] = lift(f["pattern"], LIFT[f["id"]])
+    # The old Atmos DD+ and DTS:X HD combos ignored the multi-track FLAC rule, so the half that
+    # used to sit inside the combo skips that rule too when its partner is present.
+    SKIP = {"a-dp": AT, "a-dtshd": X}
+    for f in pack["filters"]:
+        if f["id"] in SKIP:
+            if f["pattern"].count("(?!(?=.*") != 1:
+                sys.exit(f"unexpected FLAC rule in {f['id']}")
+            f["pattern"] = f["pattern"].replace("(?!(?=.*", "(?!(?!.*" + SKIP[f["id"]] + ")(?=.*")
 
 # Text badges for the filters the official pack has no icon for:
 # mono id -> (label, official filter whose chip colours it borrows, borrow that filter's icon)
@@ -162,6 +167,64 @@ def text_badge(label, icon_from):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="14" viewBox="0 0 {width} 14">'
             f'{icon}<path d="{pen.getCommands()}" fill="{glyph_fill}"/></svg>')
 
+# Combined badges, drawn like the official Dolby ones: logo, a bold word, a 3-unit gap, then a
+# Roboto 500 word at 92% opacity. "Dolby" is dropped since the logo already says it. Badges that
+# would pass the 80-unit width limit get 2 units of side padding instead of 4 / 3, so their text
+# stays the same size as every other badge instead of Nuvio shrinking the image.
+# mono id -> (official filter for logo + chip colours, logo?, bold word, light word)
+COMBO_BADGES = {
+    "v-dv-hdr10p": ("p-dv", True, "Vision", "HDR10+"),
+    "v-dv-hdr10": ("p-dv", True, "Vision", "HDR10"),
+    "v-dv-hdr": ("p-dv", True, "Vision", "HDR"),
+    "a-atmos-truehd": ("p-atmos", True, "Atmos", "TrueHD"),
+    "a-atmos-ddplus": ("p-atmos", True, "Atmos", "Digital+"),
+    "a-dtsx-hdma": ("p-dtsx", False, "DTS:X", "HD MA"),
+    "a-dtsx-hd": ("p-dtsx", False, "DTS:X", "HD"),
+}
+light = TTFont(sys.argv[3].replace("-700-", "-500-"))
+lgs, lcmap = light.getGlyphSet(), light.getBestCmap()
+LSCALE = 6.41 / light["OS/2"].sCapHeight
+MAX_UNITS = MAX_W * 14 / HEIGHT
+
+def run(glyphs, cm, sc, text, x):
+    pen = SVGPathPen(glyphs)
+    for ch in text:
+        g = cm[ord(ch)]
+        glyphs[g].draw(TransformPen(pen, (sc, 0, 0, -sc, x, BASE)))
+        x += glyphs[g].width * sc
+    return pen.getCommands(), x
+
+def combo_badge(src, logo, bold, lite):
+    for pad, right in ((4, 3), (2, 1)):
+        x = pad + (14 if logo else 0)
+        d1, x = run(gs, cmap, SCALE, bold, x)
+        d2, x = run(lgs, lcmap, LSCALE, lite, x + 3)
+        width = 2 * math.ceil((x + right) / 2)
+        if width <= MAX_UNITS:
+            break
+    else:
+        sys.exit(f"{bold} {lite} does not fit")
+    g = ""
+    if logo:
+        g = re.search(r'<g transform="translate\(4, 3\)">.*?</g>', svg_of(src), re.S).group(0)
+        g = g.replace("translate(4, 3)", f"translate({pad}, 3)")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="14" viewBox="0 0 {width} 14">'
+            f'{g}<path d="{d1}" fill="{glyph_fill}"/><path d="{d2}" fill="{glyph_fill}" fill-opacity="0.92"/></svg>')
+
+with tempfile.TemporaryDirectory() as tmp:
+    for f in pack["filters"]:
+        if f["id"] not in COMBO_BADGES:
+            continue
+        src, logo, bold, lite = COMBO_BADGES[f["id"]]
+        svg = os.path.join(tmp, "c.svg")
+        open(svg, "w").write(combo_badge(src, logo, bold, lite))
+        name = PREFIX + "c-" + f["id"] + ".png"
+        subprocess.run(["rsvg-convert", "-h", str(HEIGHT), "-o", os.path.join(img_dir, name), svg], check=True)
+        f["imageURL"] = BASE_URL + name
+        for k in ("tagStyle", "tagColor", "borderColor", "textColor"):
+            f[k] = sk[src][k]
+        done += 1
+
 with tempfile.TemporaryDirectory() as tmp:
     for f in pack["filters"]:
         if f["id"] not in LEFTOVER:
@@ -180,7 +243,7 @@ with tempfile.TemporaryDirectory() as tmp:
             f[k] = sk[colour_from][k]
         done += 1
 
-ORDER = ["gr", "gv", "ga", "gq", "imax", "gst"]
+ORDER = ["gr", "gv", "gq", "ga", "imax", "gst"]  # 4K · Dolby Vision · HDR10 · Remux · Atmos · TrueHD
 pack["groups"].sort(key=lambda g: ORDER.index(g["id"]))
 pack["filters"].sort(key=lambda f: ORDER.index(f["groupId"]))  # stable: keeps order within groups
 

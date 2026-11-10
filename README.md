@@ -1,6 +1,6 @@
 # Nuvio badge packs
 
-Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns (Nuvio Official packs: 42, combo badges split into their singles, ordered Resolution, Visual, Audio, Source, IMAX, Special); only the look changes. Paste one link, restart Nuvio to switch.
+Stream badge packs for Nuvio's **Fusion badge URLs** (Profile → Layout → Streams). Every pack has the same 49 filters and patterns (Nuvio Official packs: combo badges drawn in the official Dolby style, ordered Resolution, Visual, Source, Audio, IMAX, Special); only the look changes. Paste one link, restart Nuvio to switch.
 
 | Pack | Look | Link |
 |---|---|---|
